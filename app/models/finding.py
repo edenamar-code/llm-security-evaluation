@@ -38,7 +38,8 @@ class Finding(Base):
             "risk_score >= 0 AND risk_score <= 100",
             name="ck_findings_risk_score_range",
         ),
-        Index("ix_findings_run_db_id", "run_db_id"),
+        # Composite UNIQUE (run_db_id, test_case_db_id) already indexes run_db_id
+        # as a leftmost prefix for "all findings for a run" lookups.
         Index("ix_findings_test_case_db_id", "test_case_db_id"),
     )
 

@@ -12,6 +12,7 @@ if TYPE_CHECKING:
 class TestCase(Base):
     """Reusable immutable definition of a security test."""
 
+    __test__ = False  # not a pytest test class
     __tablename__ = "test_cases"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)

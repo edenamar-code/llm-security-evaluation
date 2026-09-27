@@ -36,11 +36,26 @@ requirements.txt
 
 ## Run
 
-One command starts the API, PostgreSQL, and Adminer:
+First time (builds the API image once):
 
 ```bash
 docker compose up --build
 ```
+
+Later starts (reuses the existing image — much faster):
+
+```bash
+docker compose up
+```
+
+Only rebuild again when `requirements.txt` or the `Dockerfile` change:
+
+```bash
+docker compose up --build
+```
+
+`app/` and `tests/` are bind-mounted, so Python code changes apply without rebuilding.
+The API runs with `--reload`.
 
 No local Python or Postgres install needed.
 

@@ -2,6 +2,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.models import Run
 from app.models.enums import FindingStatus, Severity
 
 
@@ -56,11 +57,8 @@ class RunOut(BaseModel):
     summary: RunSummaryOut
 
 
-def run_to_response(run: "Run") -> RunOut:
+def run_to_response(run: Run) -> RunOut:
     """Map a Run ORM instance to the API response shape."""
-    from app.models import Run as RunModel
-
-    assert isinstance(run, RunModel)
     return RunOut(
         run_id=run.run_id,
         model_version=run.model_version,

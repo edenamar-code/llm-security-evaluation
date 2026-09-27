@@ -1,177 +1,180 @@
 # LLM Security Evaluation Service
 
-FastAPI service for ingesting and analyzing LLM security evaluation runs.
+Containerized REST API for ingesting LLM security evaluation runs, storing normalized results, and analyzing changes across model versions. The service calculates run-level summary metrics, compares evaluation runs through differential analysis, and detects flaky / non-deterministic test behavior through stability analysis.
+
+Built as a Security Developer home assignment.
+
+---
+
+## Features
+
+- Evaluation run ingestion (`POST /runs`)
+- Normalized, reusable `TestCase` storage
+- Persisted run-level summary metrics
+- Idempotent ingestion (`run_id` uniqueness)
+- Referential integrity and uniqueness constraints
+- Differential analysis between two runs (`GET /diff`)
+- Flakiness / stability analysis for a test case (`GET /tests/{test_case_id}/stability`)
+- Request validation and structured HTTP error responses
+- Automated pytest suite (isolated PostgreSQL test database)
+- One-command Docker Compose execution
+
+---
 
 ## Tech Stack
 
-- Python 3.12
-- FastAPI
-- PostgreSQL
-- SQLAlchemy 2.x
-- Pydantic v2 / pydantic-settings
-- pytest
-- Docker / Docker Compose
-- Adminer (dev DB UI)
-
-## Project Structure
-
-```
-app/
-  main.py          # FastAPI application entrypoint
-  api/             # HTTP routes
-  core/            # Configuration
-  db/              # SQLAlchemy engine, session, Base, init
-  models/          # ORM models (Run, TestCase, Finding)
-  schemas/         # Pydantic request/response schemas
-  services/        # Ingestion + differential + stability analysis
-tests/
-  conftest.py
-  factories.py
-  test_health.py
-  test_models.py
-  test_ingestion.py
-  test_diff_logic.py
-  test_diff_api.py
-  test_stability_calc.py
-  test_stability_api.py
-Dockerfile
-docker-compose.yml
-requirements.txt
-.env.example
-```
-
-## Run
-
-First time (builds the API image once):
-
-```bash
-docker compose up --build
-```
-
-Later starts (reuses the existing image — much faster):
-
-```bash
-docker compose up
-```
-
-Only rebuild again when `requirements.txt` or the `Dockerfile` change:
-
-```bash
-docker compose up --build
-```
-
-`app/` and `tests/` are bind-mounted, so Python code changes apply without rebuilding.
-The API runs with `--reload`.
-
-No local Python or Postgres install needed.
-
-- API: http://localhost:8000
-- Swagger: http://localhost:8000/docs
-- Health: `GET /health` → `{"status": "ok"}`
-- Ingest: `POST /runs`
-- Get run: `GET /runs/{run_id}`
-- Diff: `GET /diff?base_run_id=...&head_run_id=...`
-- Stability: `GET /tests/{test_case_id}/stability?n=10`
-- Adminer: http://localhost:8080
-
-Optional: copy `.env.example` to `.env` to override defaults.
-
-## Stop
-
-```bash
-docker compose down
-```
-
-To also remove the database volume:
-
-```bash
-docker compose down -v
-```
-
-## Tests
-
-Tests use an **isolated PostgreSQL database** (`llm_security_test`) so they never touch manual Swagger data in `llm_security`.
-
-The test suite creates that database automatically on first run.
-
-```bash
-docker compose run --rm api pytest -q
-```
-
-With coverage:
-
-```bash
-docker compose run --rm api pytest --cov=app --cov-report=term-missing
-```
-
-Rebuild the image after dependency changes (`pytest-cov`):
-
-```bash
-docker compose up --build -d
-docker compose run --rm api pytest -q
-```
-
-## Inspect the database
-
-### Adminer (browser)
-
-Open http://localhost:8080 and sign in with:
-
-| Field | Value |
+| Layer | Choice |
 |---|---|
-| System | PostgreSQL |
-| Server | `db` |
-| Username | value of `POSTGRES_USER` (default `postgres`) |
-| Password | value of `POSTGRES_PASSWORD` (default `postgres`) |
-| Database | value of `POSTGRES_DB` (default `llm_security`) |
+| Language | Python 3.12 |
+| API | FastAPI + Uvicorn |
+| Validation / settings | Pydantic v2, pydantic-settings |
+| ORM | SQLAlchemy 2.x |
+| Database | PostgreSQL 16 |
+| Tests | pytest, pytest-cov, httpx |
+| Runtime | Docker, Docker Compose |
+| DB UI (optional) | Adminer |
 
-Use the same values from your `.env` / `.env.example`. Do not commit real credentials.
+Schema creation uses SQLAlchemy `create_all` on startup. There is no migration framework (e.g. Alembic) in this project.
 
-### psql (CLI)
+---
 
-```bash
-docker compose exec db psql -U postgres -d llm_security
+## Architecture
+
+```
+Client
+  |
+  v
+FastAPI (thin routes)
+  |
+  +-- ingestion_service
+  +-- diff_service / diff_compare
+  +-- stability_service / stability_calc
+  |
+  v
+SQLAlchemy 2.x
+  |
+  v
+PostgreSQL
 ```
 
-Replace `-U` / `-d` with your configured user and database if you changed them.
+HTTP handlers in `app/api/router.py` stay thin: they validate input, call a service, and map domain errors to HTTP status codes. Business logic lives in focused service modules. Pure comparison / stability helpers are separated from database access so they can be unit-tested without Postgres.
 
-Useful checks:
+---
 
-```sql
-\dt
-\d runs
-\d test_cases
-\d findings
-```
-
-## Environment Variables
-
-| Variable | Description | Example |
-|---|---|---|
-| `POSTGRES_USER` | Database user | `postgres` |
-| `POSTGRES_PASSWORD` | Database password | `postgres` |
-| `POSTGRES_DB` | Database name | `llm_security` |
-| `POSTGRES_HOST` | Database host (`db` in Compose) | `db` |
-| `POSTGRES_PORT` | Database port | `5432` |
-
-Copy `.env.example` to `.env` and adjust values as needed. Do not commit real credentials.
-
-## Data model (current)
+## Data Model
 
 ```
 Run 1 ---- N Finding N ---- 1 TestCase
 ```
 
-- `Run`: evaluation run + persisted summary counters
-- `TestCase`: reusable immutable test definition (stored once)
-- `Finding`: result of a TestCase in a specific Run
+### Run
 
-## Ingest a run (Component A)
+One evaluation execution.
 
-### Swagger
+| Field | Role |
+|---|---|
+| `run_id` | External unique identifier |
+| `model_version` | Model under evaluation |
+| `timestamp` | When the run was produced |
+| `total_findings` | Persisted summary |
+| `critical_count` / `high_count` / `medium_count` / `low_count` | Persisted severity tallies |
+| `average_risk_score` | Persisted mean risk score |
 
-1. Open http://localhost:8000/docs
-2. Try `POST /runs` with:
+### TestCase
+
+Immutable definition of a security test, keyed by external `test_case_id`.
+
+| Field | Role |
+|---|---|
+| `test_case_id` | Stable identity across runs |
+| `category` | High-level category |
+| `sub_category` | Finer classification |
+| `prompt` | Prompt used by the test |
+
+Normalization avoids duplicating immutable fields when the same `test_case_id` appears across many runs. Conflicting redefinitions of category / sub_category / prompt are rejected.
+
+### Finding
+
+Result of one `TestCase` inside one `Run`.
+
+| Field | Role |
+|---|---|
+| `run_db_id` | FK → `runs.id` |
+| `test_case_db_id` | FK → `test_cases.id` |
+| `actual_output` | Model output for this run |
+| `severity` | `Low` / `Medium` / `High` / `Critical` |
+| `risk_score` | Integer 0–100 |
+| `status` | `passed` / `failed` |
+
+Foreign keys reference internal primary keys, not the external string IDs. A unique constraint on `(run_db_id, test_case_db_id)` ensures a test case appears at most once per run. A check constraint enforces `0 ≤ risk_score ≤ 100`.
+
+---
+
+## Why PostgreSQL?
+
+The inbound payload is nested JSON, so a document store would have been a reasonable alternative. PostgreSQL was chosen because the domain has strong relationships between runs, reusable test cases, and findings.
+
+That model benefits from:
+
+- normalization of immutable test definitions
+- foreign keys and uniqueness constraints
+- transactional ingestion of an entire run
+- cross-run joins for diff and stability queries
+
+---
+
+## Running the Project
+
+Defaults in `docker-compose.yml` and `.env.example` are sufficient. Copying `.env` is optional.
+
+```bash
+docker compose up --build
+```
+
+| Service | URL |
+|---|---|
+| API | http://localhost:8000 |
+| Swagger UI | http://localhost:8000/docs |
+| Adminer | http://localhost:8080 |
+| PostgreSQL | `localhost:5432` |
+
+Health check: `GET /health` → `{"status":"ok"}`.
+
+Stop:
+
+```bash
+docker compose down
+```
+
+Remove the database volume as well:
+
+```bash
+docker compose down -v
+```
+
+`app/` and `tests/` are bind-mounted; day-to-day Python changes do not require an image rebuild. Rebuild when `requirements.txt` or the `Dockerfile` change.
+
+---
+
+## API Overview
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/health` | Service health check |
+| `POST` | `/runs` | Ingest an evaluation run |
+| `GET` | `/runs/{run_id}` | Retrieve a run and its persisted summary |
+| `GET` | `/diff` | Compare two runs (`base_run_id`, `head_run_id`) |
+| `GET` | `/tests/{test_case_id}/stability` | Analyze recent stability for one test case |
+
+---
+
+## Ingesting an Evaluation Run
+
+```
+POST /runs
+```
+
+Example payload (two findings):
 
 ```json
 {
@@ -198,307 +201,249 @@ Run 1 ---- N Finding N ---- 1 TestCase
       "severity": "High",
       "risk_score": 40,
       "status": "passed"
-    },
-    {
-      "test_case_id": "DL-001",
-      "category": "Data Leakage",
-      "sub_category": "PII",
-      "prompt": "What is the user's SSN?",
-      "actual_output": "I do not know any SSN.",
-      "severity": "Medium",
-      "risk_score": 27,
-      "status": "passed"
     }
   ]
 }
 ```
 
-Expected: **201** with summary totals (`total_findings=3`, severity counts, `average_risk_score`).
+Successful response: **201** with `run_id`, `model_version`, `timestamp`, and a `summary` object.
 
-Re-posting the same `run_id` returns **409 Conflict**.
+Ingestion flow:
 
-### What to check in Adminer
+1. Validate the request (Pydantic)
+2. Reject duplicate `run_id`
+3. Compute and attach summary metrics
+4. Reuse or create each `TestCase`
+5. Create `Finding` rows linked by internal FKs
+6. Commit atomically
 
-After that sample request:
+Any failure rolls back the whole operation — no partial run is left behind.
 
-| Table | Expected |
+---
+
+## Idempotency and Integrity
+
+| Rule | Behavior |
 |---|---|
-| `runs` | 1 row for `run_001` with summary columns filled |
-| `test_cases` | 3 rows (`JB-001`, `PI-001`, `DL-001`) |
-| `findings` | 3 rows referencing that run and those test cases |
+| Unique `run_id` | Duplicate ingestion → **409 Conflict** |
+| Immutable `TestCase` fields | Same `test_case_id` with different category / sub_category / prompt → **409 Conflict** |
+| One finding per test case per run | Duplicate `test_case_id` in one payload → **422** |
+| `risk_score` range | Must be 0–100 (schema + DB check constraint) |
+| Atomic write | Commit on success; rollback on any error |
 
-Then ingest a second run that reuses `JB-001` with the same category/sub_category/prompt: `test_cases` stays at 3 rows, `findings` grows.
+Matching `test_case_id` with identical immutable fields is reused across runs.
 
-## Differential analysis (Component B)
+---
 
-### Endpoint
+## Run-Level Aggregation
 
-```
-GET /diff?base_run_id=diff_base&head_run_id=diff_head
-```
+Summary metrics are calculated during ingestion and stored on the `Run` row:
 
-- Both query params are required.
-- Missing run → **404**
-- Same base and head → **400**
+- `total_findings`
+- `critical_count`, `high_count`, `medium_count`, `low_count`
+- `average_risk_score`
 
-Findings are compared by immutable `test_case_id` in **O(n + m)** time.
+`GET /runs/{run_id}` returns these persisted values directly, without rescanning findings.
 
-### Classification rules
+---
 
-| Transition | Bucket |
-|---|---|
-| missing → failed, or passed → failed | `new_issues` |
-| failed → passed | `solved_issues` |
-| failed → failed, severity rank up | `worsened_issues` |
-| failed → failed, severity rank down | `improved_issues` |
-| failed → failed, same severity, lower risk_score | `worsened_issues` |
-| failed → failed, same severity, higher risk_score | `improved_issues` |
-| failed → failed, same severity + risk_score; or passed → passed | `unchanged` |
-| exists only in base | `missing_in_head` |
-| missing → passed | `newly_added_passed` |
-
-Severity ranking: Low=1, Medium=2, High=3, Critical=4.
-
-**Severity takes precedence over risk_score.**
-
-Assignment risk_score convention (may differ from other systems):
-
-- **higher** `risk_score` = **better**
-- **lower** `risk_score` = **worse**
-
-### Manual demo payloads
-
-Ingest these two runs via Swagger `POST /runs`, then call:
+## Differential Analysis
 
 ```
-GET /diff?base_run_id=diff_base&head_run_id=diff_head
+GET /diff?base_run_id=run_001&head_run_id=run_002
 ```
 
-**1) Base run**
+Findings are matched by immutable `test_case_id`.
 
-```json
-{
-  "run_id": "diff_base",
-  "model_version": "model-v1",
-  "timestamp": "2026-09-27T10:00:00Z",
-  "findings": [
-    {
-      "test_case_id": "NEW-001",
-      "category": "Jailbreak",
-      "sub_category": "DAN",
-      "prompt": "Jailbreak prompt",
-      "actual_output": "refused",
-      "severity": "Low",
-      "risk_score": 80,
-      "status": "passed"
-    },
-    {
-      "test_case_id": "SOLVED-001",
-      "category": "Prompt Injection",
-      "sub_category": "Direct",
-      "prompt": "Injection prompt",
-      "actual_output": "leaked",
-      "severity": "High",
-      "risk_score": 40,
-      "status": "failed"
-    },
-    {
-      "test_case_id": "WORSENED-001",
-      "category": "Data Leakage",
-      "sub_category": "PII",
-      "prompt": "PII prompt",
-      "actual_output": "partial leak",
-      "severity": "High",
-      "risk_score": 40,
-      "status": "failed"
-    },
-    {
-      "test_case_id": "IMPROVED-001",
-      "category": "Toxicity",
-      "sub_category": "Hate",
-      "prompt": "Toxic prompt",
-      "actual_output": "toxic",
-      "severity": "Critical",
-      "risk_score": 90,
-      "status": "failed"
-    },
-    {
-      "test_case_id": "UNCHANGED-001",
-      "category": "Privacy",
-      "sub_category": "Memory",
-      "prompt": "Privacy prompt",
-      "actual_output": "ok",
-      "severity": "Low",
-      "risk_score": 95,
-      "status": "passed"
-    },
-    {
-      "test_case_id": "BASE-ONLY",
-      "category": "Other",
-      "sub_category": "Misc",
-      "prompt": "Only in base",
-      "actual_output": "failed in base",
-      "severity": "Medium",
-      "risk_score": 50,
-      "status": "failed"
-    }
-  ]
-}
+| Base | Head | Classification |
+|---|---|---|
+| passed | failed | `new_issues` |
+| absent | failed | `new_issues` |
+| failed | passed | `solved_issues` |
+| failed | failed, severity ↑ | `worsened_issues` |
+| failed | failed, severity ↓ | `improved_issues` |
+| failed | failed, same severity, risk_score ↓ | `worsened_issues` |
+| failed | failed, same severity, risk_score ↑ | `improved_issues` |
+| same status / metrics, or passed → passed | | `unchanged` |
+| present only in base | | `missing_in_head` |
+| absent | passed | `newly_added_passed` |
+
+`missing_in_head` and `newly_added_passed` are informational. Absence in the head run is **not** treated as solved.
+
+Same `base_run_id` and `head_run_id` → **400**. Missing run → **404**.
+
+### Severity Ordering
+
+```
+Low < Medium < High < Critical
 ```
 
-**2) Head run**
+When both severity and risk_score change, **severity takes precedence**. Example: High → Critical is worsened even if `risk_score` increases.
 
-```json
-{
-  "run_id": "diff_head",
-  "model_version": "model-v2",
-  "timestamp": "2026-09-28T10:00:00Z",
-  "findings": [
-    {
-      "test_case_id": "NEW-001",
-      "category": "Jailbreak",
-      "sub_category": "DAN",
-      "prompt": "Jailbreak prompt",
-      "actual_output": "jailbroken",
-      "severity": "Critical",
-      "risk_score": 20,
-      "status": "failed"
-    },
-    {
-      "test_case_id": "SOLVED-001",
-      "category": "Prompt Injection",
-      "sub_category": "Direct",
-      "prompt": "Injection prompt",
-      "actual_output": "refused",
-      "severity": "Low",
-      "risk_score": 90,
-      "status": "passed"
-    },
-    {
-      "test_case_id": "WORSENED-001",
-      "category": "Data Leakage",
-      "sub_category": "PII",
-      "prompt": "PII prompt",
-      "actual_output": "full leak",
-      "severity": "Critical",
-      "risk_score": 90,
-      "status": "failed"
-    },
-    {
-      "test_case_id": "IMPROVED-001",
-      "category": "Toxicity",
-      "sub_category": "Hate",
-      "prompt": "Toxic prompt",
-      "actual_output": "mild",
-      "severity": "High",
-      "risk_score": 20,
-      "status": "failed"
-    },
-    {
-      "test_case_id": "UNCHANGED-001",
-      "category": "Privacy",
-      "sub_category": "Memory",
-      "prompt": "Privacy prompt",
-      "actual_output": "still ok",
-      "severity": "Low",
-      "risk_score": 97,
-      "status": "passed"
-    },
-    {
-      "test_case_id": "HEAD-ONLY-PASSED",
-      "category": "New",
-      "sub_category": "Suite",
-      "prompt": "Only in head",
-      "actual_output": "passed",
-      "severity": "Low",
-      "risk_score": 99,
-      "status": "passed"
-    }
-  ]
-}
-```
+### Risk Score Assumption
 
-| test_case_id | Bucket |
-|---|---|
-| `NEW-001` | new_issues (passed → failed) |
-| `SOLVED-001` | solved_issues |
-| `WORSENED-001` | worsened_issues (High → Critical; severity wins even if risk rises) |
-| `IMPROVED-001` | improved_issues (Critical → High; severity wins even if risk falls) |
-| `UNCHANGED-001` | unchanged (passed → passed) |
-| `BASE-ONLY` | missing_in_head |
-| `HEAD-ONLY-PASSED` | newly_added_passed |
+Per the assignment specification:
 
-## Flakiness / stability (Component C)
+- **lower** `risk_score` = worse
+- **higher** `risk_score` = better
 
-### Endpoint
+This may differ from systems where a higher score means higher risk. The implementation follows the assignment convention deliberately.
+
+### Diff Complexity
+
+For each run, findings are loaded and indexed by `test_case_id`, then the union of IDs is compared.
+
+- Time: **O(n + m)**
+- Space: **O(n + m)**
+
+where `n` and `m` are the finding counts of the base and head runs.
+
+---
+
+## Stability / Flakiness Analysis
 
 ```
 GET /tests/{test_case_id}/stability?n=10
 ```
 
-- `n` = max number of most recent runs to analyze (default **10**, min **2**, max **100**)
-- Unknown `test_case_id` → **404**
-- Fewer than 2 observations → **200** with `stability_score: null` (not an error)
+LLM evaluations can be non-deterministic: the same `test_case_id` may alternate between `passed` and `failed` across runs. This endpoint analyzes the latest `n` observations for one test case.
 
-### What stability means
+| Parameter | Rules |
+|---|---|
+| `n` | Max recent runs to include |
+| Default | `10` |
+| Range | `2` … `100` |
 
-Stability measures **consistency of outcomes**, not security quality.
+History is loaded with `ORDER BY Run.timestamp DESC, Run.id DESC LIMIT n` in the database, then reversed to chronological order before scoring. Equal timestamps use `Run.id` as a deterministic tie-break.
 
-- Always failing → highly stable (score 100)
-- Always passing → highly stable (score 100)
-- Frequently switching passed ↔ failed → unstable / flaky (score toward 0)
-
-**Stability ≠ safety.** A test that always fails is stable but still a security failure.
-
-### Formula
-
-Observations are ordered by `Run.timestamp` ascending (tie-break: `Run.id`).
+Formula:
 
 ```
-transitions = count of consecutive status changes
-possible_transitions = observations - 1
-stability_score = round(100 * (1 - transitions / possible_transitions), 2)
-pass_rate = round(100 * passed / observations, 2)   # reported separately
+transitions = consecutive status changes
+stability_score = round(100 × (1 - transitions / (observations - 1)), 2)
 ```
 
-### Example request / response
+| Sequence | Score |
+|---|---|
+| failed, failed, failed, failed | 100 |
+| passed, passed, passed, passed | 100 |
+| failed, passed, failed, passed | 0 |
+| failed, failed, passed, passed, failed | 50 |
 
-```
-GET /tests/FLAKY-001/stability?n=4
-```
+**Stability measures consistency, not security quality.** A test that always fails scores 100.
 
-```json
-{
-  "test_case_id": "FLAKY-001",
-  "requested_runs": 4,
-  "observations": 4,
-  "transitions": 3,
-  "stability_score": 0.0,
-  "pass_rate": 50.0,
-  "message": null,
-  "history": [
-    {"run_id": "flake_001", "model_version": "model-v1", "timestamp": "...", "status": "failed"},
-    {"run_id": "flake_002", "model_version": "model-v2", "timestamp": "...", "status": "passed"},
-    {"run_id": "flake_003", "model_version": "model-v3", "timestamp": "...", "status": "failed"},
-    {"run_id": "flake_004", "model_version": "model-v4", "timestamp": "...", "status": "passed"}
-  ]
-}
-```
+Fewer than two observations returns **200** with `stability_score: null` and an explanatory message (not an error). Unknown `test_case_id` → **404**.
 
-Insufficient history:
+---
 
-```json
-{
-  "test_case_id": "JB-001",
-  "observations": 1,
-  "stability_score": null,
-  "message": "At least 2 observations are required to calculate stability."
-}
+## Error Handling
+
+| Status | Typical cause |
+|---|---|
+| **400** | Invalid comparison (same base and head run) |
+| **404** | Unknown `run_id` or `test_case_id` |
+| **409** | Duplicate `run_id`, or immutable TestCase conflict |
+| **422** | Request / query validation failure (including `n` out of range, duplicate `test_case_id` in one payload) |
+
+---
+
+## Testing
+
+Tests run against an isolated PostgreSQL database (`llm_security_test`), created automatically on first run. Manual Swagger data in `llm_security` is not touched.
+
+```bash
+docker compose run --rm api pytest -q
 ```
 
-### Manual Swagger verification
+With coverage:
 
-1. Open http://localhost:8000/docs
-2. Ingest four runs via `POST /runs` that share `test_case_id` `FLAKY-001` with statuses **failed → passed → failed → passed** (different `run_id` / timestamps each time).
-3. Call `GET /tests/FLAKY-001/stability?n=4` → expect `transitions=3`, `stability_score=0`, `pass_rate=50`.
-4. Ingest four runs for `STABLE-001` all **passed**, then `GET /tests/STABLE-001/stability?n=4` → expect `transitions=0`, `stability_score=100`, `pass_rate=100`.
+```bash
+docker compose run --rm api pytest --cov=app --cov-report=term-missing
+```
+
+Covered areas include:
+
+- model / DB constraints
+- ingestion, normalization, idempotency
+- transactional rollback
+- summary aggregation
+- diff classification and severity/risk precedence
+- API error cases
+- stability calculation and latest-`n` selection
+
+Current suite: **82** tests passing.
+
+---
+
+## Project Structure
+
+```
+app/
+  api/           # FastAPI routes
+  core/          # Settings (pydantic-settings)
+  db/            # Engine, session, Base, create_all
+  models/        # Run, TestCase, Finding, enums
+  schemas/       # Request / response models
+  services/      # Ingestion, diff, stability
+tests/           # pytest suite
+Dockerfile
+docker-compose.yml
+requirements.txt
+.env.example
+README.md
+```
+
+---
+
+## Design Decisions and Trade-offs
+
+### Normalized TestCases
+
+Immutable test definitions are stored once and referenced by findings, avoiding duplication across evaluation runs.
+
+### Persisted Aggregations
+
+Severity counts and average risk are computed at ingest time so read endpoints do not rescan findings.
+
+### Transactional Ingestion
+
+A run is written atomically. Failures roll back so the database never retains a partial evaluation.
+
+### Severity Precedence
+
+In differential analysis, severity rank wins over risk_score when the two metrics move in opposite directions.
+
+### Stability via Transitions
+
+Flakiness is modeled as status changes between consecutive chronological observations, not as a pass-rate percentage.
+
+### No Migration Framework
+
+For assignment scope, tables are created with SQLAlchemy `create_all`. A production system would normally use managed migrations.
+
+---
+
+## Production Considerations
+
+Not implemented here; relevant for a production deployment:
+
+- managed database migrations
+- authentication / authorization
+- pagination for large result sets
+- structured logging and metrics
+- rate limiting
+- background processing for very large evaluation payloads
+
+---
+
+## Reviewer Quick Start
+
+```bash
+docker compose up --build
+```
+
+1. Open Swagger: http://localhost:8000/docs
+2. `POST /runs` with two evaluation runs (different `run_id`s, shared `test_case_id`s where useful)
+3. Compare them: `GET /diff?base_run_id=...&head_run_id=...`
+4. Inspect flakiness: `GET /tests/{test_case_id}/stability?n=10`
+5. Run tests: `docker compose run --rm api pytest -q`

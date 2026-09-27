@@ -5,4 +5,5 @@ psycopg[binary]
 pydantic
 pydantic-settings
 pytest
+pytest-cov
 httpx

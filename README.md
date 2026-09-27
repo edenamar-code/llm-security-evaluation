@@ -25,10 +25,12 @@ app/
   schemas/         # Pydantic request/response schemas
   services/        # Ingestion + differential analysis
 tests/
+  conftest.py
+  factories.py
   test_health.py
   test_models.py
   test_ingestion.py
-  test_diff_compare.py
+  test_diff_logic.py
   test_diff_api.py
 Dockerfile
 docker-compose.yml
@@ -85,10 +87,25 @@ docker compose down -v
 
 ## Tests
 
-Run tests inside Docker (no local Python install required):
+Tests use an **isolated PostgreSQL database** (`llm_security_test`) so they never touch manual Swagger data in `llm_security`.
+
+The test suite creates that database automatically on first run.
 
 ```bash
-docker compose run --rm api pytest
+docker compose run --rm api pytest -q
+```
+
+With coverage:
+
+```bash
+docker compose run --rm api pytest --cov=app --cov-report=term-missing
+```
+
+Rebuild the image after dependency changes (`pytest-cov`):
+
+```bash
+docker compose up --build -d
+docker compose run --rm api pytest -q
 ```
 
 ## Inspect the database
@@ -263,7 +280,7 @@ GET /diff?base_run_id=diff_base&head_run_id=diff_head
   "timestamp": "2026-09-27T10:00:00Z",
   "findings": [
     {
-      "test_case_id": "NEW-REGRESSION",
+      "test_case_id": "NEW-001",
       "category": "Jailbreak",
       "sub_category": "DAN",
       "prompt": "Jailbreak prompt",
@@ -335,7 +352,7 @@ GET /diff?base_run_id=diff_base&head_run_id=diff_head
   "timestamp": "2026-09-28T10:00:00Z",
   "findings": [
     {
-      "test_case_id": "NEW-REGRESSION",
+      "test_case_id": "NEW-001",
       "category": "Jailbreak",
       "sub_category": "DAN",
       "prompt": "Jailbreak prompt",
@@ -393,16 +410,6 @@ GET /diff?base_run_id=diff_base&head_run_id=diff_head
       "severity": "Low",
       "risk_score": 99,
       "status": "passed"
-    },
-    {
-      "test_case_id": "HEAD-ONLY-FAILED",
-      "category": "New",
-      "sub_category": "Bug",
-      "prompt": "Brand new failure",
-      "actual_output": "failed",
-      "severity": "High",
-      "risk_score": 35,
-      "status": "failed"
     }
   ]
 }
@@ -410,8 +417,7 @@ GET /diff?base_run_id=diff_base&head_run_id=diff_head
 
 | test_case_id | Bucket |
 |---|---|
-| `NEW-REGRESSION` | new_issues (passed → failed) |
-| `HEAD-ONLY-FAILED` | new_issues (missing → failed) |
+| `NEW-001` | new_issues (passed → failed) |
 | `SOLVED-001` | solved_issues |
 | `WORSENED-001` | worsened_issues (High → Critical; severity wins even if risk rises) |
 | `IMPROVED-001` | improved_issues (Critical → High; severity wins even if risk falls) |

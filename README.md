@@ -33,14 +33,19 @@ requirements.txt
 
 ## Run
 
+One command starts the API and PostgreSQL:
+
 ```bash
-cp .env.example .env
 docker compose up --build
 ```
 
-API: http://localhost:8000  
-Swagger: http://localhost:8000/docs  
-Health: `GET /health` → `{"status": "ok"}`
+No local Python or Postgres install needed.
+
+- API: http://localhost:8000
+- Swagger: http://localhost:8000/docs
+- Health: `GET /health` → `{"status": "ok"}`
+
+Optional: copy `.env.example` to `.env` to override defaults.
 
 ## Stop
 

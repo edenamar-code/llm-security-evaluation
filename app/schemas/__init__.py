@@ -5,6 +5,7 @@ from app.schemas.diff import (
     FindingSideOut,
 )
 from app.schemas.runs import FindingIn, RunCreate, RunOut, RunSummaryOut, run_to_response
+from app.schemas.stability import StabilityHistoryItemOut, StabilityReportOut
 
 __all__ = [
     "DiffItemOut",
@@ -15,5 +16,7 @@ __all__ = [
     "RunCreate",
     "RunOut",
     "RunSummaryOut",
+    "StabilityHistoryItemOut",
+    "StabilityReportOut",
     "run_to_response",
 ]

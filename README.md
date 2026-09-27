@@ -23,7 +23,7 @@ app/
   db/              # SQLAlchemy engine, session, Base, init
   models/          # ORM models (Run, TestCase, Finding)
   schemas/         # Pydantic request/response schemas
-  services/        # Ingestion + differential analysis
+  services/        # Ingestion + differential + stability analysis
 tests/
   conftest.py
   factories.py
@@ -32,6 +32,8 @@ tests/
   test_ingestion.py
   test_diff_logic.py
   test_diff_api.py
+  test_stability_calc.py
+  test_stability_api.py
 Dockerfile
 docker-compose.yml
 requirements.txt
@@ -69,6 +71,7 @@ No local Python or Postgres install needed.
 - Ingest: `POST /runs`
 - Get run: `GET /runs/{run_id}`
 - Diff: `GET /diff?base_run_id=...&head_run_id=...`
+- Stability: `GET /tests/{test_case_id}/stability?n=10`
 - Adminer: http://localhost:8080
 
 Optional: copy `.env.example` to `.env` to override defaults.
@@ -424,3 +427,78 @@ GET /diff?base_run_id=diff_base&head_run_id=diff_head
 | `UNCHANGED-001` | unchanged (passed → passed) |
 | `BASE-ONLY` | missing_in_head |
 | `HEAD-ONLY-PASSED` | newly_added_passed |
+
+## Flakiness / stability (Component C)
+
+### Endpoint
+
+```
+GET /tests/{test_case_id}/stability?n=10
+```
+
+- `n` = max number of most recent runs to analyze (default **10**, min **2**, max **100**)
+- Unknown `test_case_id` → **404**
+- Fewer than 2 observations → **200** with `stability_score: null` (not an error)
+
+### What stability means
+
+Stability measures **consistency of outcomes**, not security quality.
+
+- Always failing → highly stable (score 100)
+- Always passing → highly stable (score 100)
+- Frequently switching passed ↔ failed → unstable / flaky (score toward 0)
+
+**Stability ≠ safety.** A test that always fails is stable but still a security failure.
+
+### Formula
+
+Observations are ordered by `Run.timestamp` ascending (tie-break: `Run.id`).
+
+```
+transitions = count of consecutive status changes
+possible_transitions = observations - 1
+stability_score = round(100 * (1 - transitions / possible_transitions), 2)
+pass_rate = round(100 * passed / observations, 2)   # reported separately
+```
+
+### Example request / response
+
+```
+GET /tests/FLAKY-001/stability?n=4
+```
+
+```json
+{
+  "test_case_id": "FLAKY-001",
+  "requested_runs": 4,
+  "observations": 4,
+  "transitions": 3,
+  "stability_score": 0.0,
+  "pass_rate": 50.0,
+  "message": null,
+  "history": [
+    {"run_id": "flake_001", "model_version": "model-v1", "timestamp": "...", "status": "failed"},
+    {"run_id": "flake_002", "model_version": "model-v2", "timestamp": "...", "status": "passed"},
+    {"run_id": "flake_003", "model_version": "model-v3", "timestamp": "...", "status": "failed"},
+    {"run_id": "flake_004", "model_version": "model-v4", "timestamp": "...", "status": "passed"}
+  ]
+}
+```
+
+Insufficient history:
+
+```json
+{
+  "test_case_id": "JB-001",
+  "observations": 1,
+  "stability_score": null,
+  "message": "At least 2 observations are required to calculate stability."
+}
+```
+
+### Manual Swagger verification
+
+1. Open http://localhost:8000/docs
+2. Ingest four runs via `POST /runs` that share `test_case_id` `FLAKY-001` with statuses **failed → passed → failed → passed** (different `run_id` / timestamps each time).
+3. Call `GET /tests/FLAKY-001/stability?n=4` → expect `transitions=3`, `stability_score=0`, `pass_rate=50`.
+4. Ingest four runs for `STABLE-001` all **passed**, then `GET /tests/STABLE-001/stability?n=4` → expect `transitions=0`, `stability_score=100`, `pass_rate=100`.

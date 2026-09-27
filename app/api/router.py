@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.schemas.diff import DiffReportOut
 from app.schemas.runs import RunCreate, RunOut, run_to_response
+from app.schemas.stability import StabilityReportOut
 from app.services.diff_service import (
     DiffNotFoundError,
     DiffValidationError,
@@ -13,6 +14,10 @@ from app.services.ingestion_service import (
     IngestionConflictError,
     get_run_by_external_id,
     ingest_run,
+)
+from app.services.stability_service import (
+    StabilityNotFoundError,
+    get_test_case_stability,
 )
 
 router = APIRouter()
@@ -64,6 +69,21 @@ def get_diff(
             detail=exc.message,
         ) from exc
     except DiffNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=exc.message,
+        ) from exc
+
+
+@router.get("/tests/{test_case_id}/stability", response_model=StabilityReportOut)
+def get_stability(
+    test_case_id: str,
+    n: int = Query(default=10, ge=2, le=100),
+    db: Session = Depends(get_db),
+) -> StabilityReportOut:
+    try:
+        return get_test_case_stability(db, test_case_id=test_case_id, n=n)
+    except StabilityNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=exc.message,

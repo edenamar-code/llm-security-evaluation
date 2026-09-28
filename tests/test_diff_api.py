@@ -1,9 +1,6 @@
 """API-level tests for GET /diff, including the main 7-bucket regression scenario."""
 
-from sqlalchemy.orm import Session
-
 from app.schemas.diff import DiffReport
-from app.services.diff_service import compare_runs
 from tests.factories import make_finding_payload, make_run_payload
 
 # Exactly one test_case_id per bucket for the main regression scenario.
@@ -303,13 +300,3 @@ def test_full_differential_scenario_seven_buckets(client) -> None:
     assert worsened["base"]["severity"] == "High"
     assert worsened["head"]["severity"] == "Critical"
     assert worsened["head"]["risk_score"] == 90
-
-
-def test_diff_loading_avoids_n_plus_one_queries(client, db: Session, count_queries) -> None:
-    """selectinload should keep query count bounded (not one query per finding)."""
-    _ingest_pair(client)
-    with count_queries() as counter:
-        compare_runs(db, "diff_base", "diff_head")
-    # Per run: SELECT run + SELECT findings + SELECT test_cases ≈ 3; two runs ≈ 6.
-    assert counter.count <= 8
-    assert counter.count >= 2

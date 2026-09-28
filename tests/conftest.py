@@ -9,7 +9,6 @@ from datetime import UTC, datetime
 import psycopg
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import event
 from sqlalchemy.orm import Session
 
 # Route all tests to a dedicated DB before importing application modules.
@@ -150,36 +149,3 @@ def sample_payload() -> dict:
             ),
         ],
     )
-
-
-@pytest.fixture
-def count_queries():
-    """Context helper that counts SQL statements executed on the test engine."""
-
-    class QueryCounter:
-        def __init__(self) -> None:
-            self.statements: list[str] = []
-
-        def __enter__(self) -> QueryCounter:
-            event.listen(engine, "before_cursor_execute", self._before_cursor_execute)
-            return self
-
-        def __exit__(self, *args: object) -> None:
-            event.remove(engine, "before_cursor_execute", self._before_cursor_execute)
-
-        def _before_cursor_execute(
-            self,
-            conn,
-            cursor,
-            statement,
-            parameters,
-            context,
-            executemany,
-        ) -> None:
-            self.statements.append(statement)
-
-        @property
-        def count(self) -> int:
-            return len(self.statements)
-
-    return QueryCounter

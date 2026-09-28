@@ -1,17 +1,10 @@
-"""Pytest configuration: isolated PostgreSQL test database + shared fixtures."""
-
-from __future__ import annotations
-
 import os
 from collections.abc import Generator
 from datetime import UTC, datetime
-
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-# Route all tests to a dedicated DB before importing application modules.
-# The database must already exist; missing DB should fail loudly.
 TEST_DB_NAME = os.environ.get("POSTGRES_TEST_DB", "llm_security_test")
 os.environ["POSTGRES_DB"] = TEST_DB_NAME
 

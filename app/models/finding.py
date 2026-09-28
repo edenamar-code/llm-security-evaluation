@@ -20,13 +20,6 @@ if TYPE_CHECKING:
 
 
 class Finding(Base):
-    """Result of executing a TestCase within a specific Run.
-
-    Foreign keys reference internal DB primary keys (runs.id / test_cases.id),
-    not the external run_id / test_case_id strings. Columns are named
-    run_db_id and test_case_db_id to keep that distinction clear.
-    """
-
     __tablename__ = "findings"
     __table_args__ = (
         UniqueConstraint(

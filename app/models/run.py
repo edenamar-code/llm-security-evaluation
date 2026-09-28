@@ -11,8 +11,6 @@ if TYPE_CHECKING:
 
 
 class Run(Base):
-    """Evaluation run with persisted summary counters."""
-
     __tablename__ = "runs"
     __table_args__ = (
         Index("ix_runs_model_version", "model_version"),

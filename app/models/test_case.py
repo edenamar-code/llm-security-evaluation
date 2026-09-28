@@ -10,8 +10,6 @@ if TYPE_CHECKING:
 
 
 class TestCase(Base):
-    """Reusable immutable definition of a security test."""
-
     __test__ = False
     __tablename__ = "test_cases"
 

@@ -66,7 +66,6 @@ def test_one_observation_returns_null_stability(
     assert body["observations"] == 1
     assert body["stability_score"] is None
     assert body["transitions"] == 0
-    assert body["pass_rate"] == 0.0
     assert body["message"] == (
         "At least 2 observations are required to calculate stability."
     )
@@ -86,7 +85,6 @@ def test_flaky_alternating_history(client: TestClient, db: Session) -> None:
     assert body["observations"] == 4
     assert body["transitions"] == 3
     assert body["stability_score"] == 0.0
-    assert body["pass_rate"] == 50.0
     assert body["message"] is None
     assert [item["status"] for item in body["history"]] == [
         "failed",
@@ -114,7 +112,6 @@ def test_stable_all_passed(client: TestClient, db: Session) -> None:
     body = response.json()
     assert body["transitions"] == 0
     assert body["stability_score"] == 100.0
-    assert body["pass_rate"] == 100.0
 
 
 def test_latest_n_results_are_used(client: TestClient, db: Session) -> None:
@@ -133,7 +130,6 @@ def test_latest_n_results_are_used(client: TestClient, db: Session) -> None:
     assert body["observations"] == 3
     assert body["transitions"] == 0
     assert body["stability_score"] == 100.0
-    assert body["pass_rate"] == 100.0
     assert [item["run_id"] for item in body["history"]] == [
         "ln_003",
         "ln_004",
@@ -163,7 +159,6 @@ def test_n_larger_than_history_uses_available(
     assert body["observations"] == 2
     assert body["transitions"] == 1
     assert body["stability_score"] == 0.0
-    assert body["pass_rate"] == 50.0
 
 
 def test_history_is_chronological(client: TestClient, db: Session) -> None:

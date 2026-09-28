@@ -82,7 +82,6 @@ def get_test_case_stability(
         observations=metrics.observations,
         transitions=metrics.transitions,
         stability_score=metrics.stability_score,
-        pass_rate=metrics.pass_rate,
         message=message,
         history=history,
     )

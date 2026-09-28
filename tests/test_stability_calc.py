@@ -11,7 +11,6 @@ def test_all_passed() -> None:
     assert metrics.transitions == 0
     assert metrics.observations == 3
     assert metrics.stability_score == 100.0
-    assert metrics.pass_rate == 100.0
 
 
 def test_all_failed() -> None:
@@ -21,7 +20,6 @@ def test_all_failed() -> None:
     assert metrics.transitions == 0
     assert metrics.observations == 3
     assert metrics.stability_score == 100.0
-    assert metrics.pass_rate == 0.0
 
 
 def test_alternating_passed_failed() -> None:
@@ -36,7 +34,6 @@ def test_alternating_passed_failed() -> None:
     assert metrics.transitions == 3
     assert metrics.observations == 4
     assert metrics.stability_score == 0.0
-    assert metrics.pass_rate == 50.0
 
 
 def test_two_passed_then_two_failed() -> None:
@@ -51,7 +48,6 @@ def test_two_passed_then_two_failed() -> None:
     assert metrics.transitions == 1
     assert metrics.observations == 4
     assert metrics.stability_score == 66.67
-    assert metrics.pass_rate == 50.0
 
 
 def test_exactly_two_failed_then_passed() -> None:
@@ -59,7 +55,6 @@ def test_exactly_two_failed_then_passed() -> None:
     assert metrics.transitions == 1
     assert metrics.observations == 2
     assert metrics.stability_score == 0.0
-    assert metrics.pass_rate == 50.0
 
 
 def test_exactly_two_failed() -> None:
@@ -67,7 +62,6 @@ def test_exactly_two_failed() -> None:
     assert metrics.transitions == 0
     assert metrics.observations == 2
     assert metrics.stability_score == 100.0
-    assert metrics.pass_rate == 0.0
 
 
 def test_single_observation_returns_null_score() -> None:
@@ -75,7 +69,6 @@ def test_single_observation_returns_null_score() -> None:
     assert metrics.transitions == 0
     assert metrics.observations == 1
     assert metrics.stability_score is None
-    assert metrics.pass_rate == 100.0
 
 
 def test_empty_observations_returns_null_score() -> None:
@@ -83,7 +76,6 @@ def test_empty_observations_returns_null_score() -> None:
     assert metrics.transitions == 0
     assert metrics.observations == 0
     assert metrics.stability_score is None
-    assert metrics.pass_rate is None
 
 
 def test_mixed_sequence() -> None:
@@ -100,4 +92,3 @@ def test_mixed_sequence() -> None:
     assert metrics.transitions == 2
     assert metrics.observations == 5
     assert metrics.stability_score == 50.0
-    assert metrics.pass_rate == 40.0

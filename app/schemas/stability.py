@@ -22,6 +22,5 @@ class StabilityReport(BaseModel):
     observations: int
     transitions: int
     stability_score: float | None = None
-    pass_rate: float | None = None
     message: str | None = None
     history: list[StabilityHistoryItem] = Field(default_factory=list)

@@ -2,7 +2,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import Finding, Run, Severity, TestCase
-from app.schemas.runs import FindingIn, RunCreate
+from app.schemas.runs import FindingCreate, RunCreate
 
 
 class IngestionConflictError(Exception):
@@ -13,7 +13,7 @@ class IngestionConflictError(Exception):
         super().__init__(message)
 
 
-def _calculate_summary(findings: list[FindingIn]) -> dict[str, int | float]:
+def _calculate_summary(findings: list[FindingCreate]) -> dict[str, int | float]:
     total = len(findings)
     if total == 0:
         return {
@@ -35,7 +35,7 @@ def _calculate_summary(findings: list[FindingIn]) -> dict[str, int | float]:
     }
 
 
-def _get_or_create_test_case(db: Session, finding: FindingIn) -> TestCase:
+def _get_or_create_test_case(db: Session, finding: FindingCreate) -> TestCase:
     existing = db.scalar(
         select(TestCase).where(TestCase.test_case_id == finding.test_case_id)
     )

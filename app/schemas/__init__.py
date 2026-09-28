@@ -1,22 +1,22 @@
 from app.schemas.diff import (
-    DiffItemOut,
-    DiffReportOut,
-    DiffSummaryOut,
-    FindingSideOut,
+    DiffItem,
+    DiffReport,
+    DiffSummary,
+    FindingSide,
 )
-from app.schemas.runs import FindingIn, RunCreate, RunOut, RunSummaryOut, run_to_response
-from app.schemas.stability import StabilityHistoryItemOut, StabilityReportOut
+from app.schemas.runs import FindingCreate, RunCreate, RunResponse, RunSummary, run_to_response
+from app.schemas.stability import StabilityHistoryItem, StabilityReport
 
 __all__ = [
-    "DiffItemOut",
-    "DiffReportOut",
-    "DiffSummaryOut",
-    "FindingIn",
-    "FindingSideOut",
+    "DiffItem",
+    "DiffReport",
+    "DiffSummary",
+    "FindingCreate",
+    "FindingSide",
     "RunCreate",
-    "RunOut",
-    "RunSummaryOut",
-    "StabilityHistoryItemOut",
-    "StabilityReportOut",
+    "RunResponse",
+    "RunSummary",
+    "StabilityHistoryItem",
+    "StabilityReport",
     "run_to_response",
 ]

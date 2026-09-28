@@ -6,7 +6,9 @@ from app.models import Run
 from app.models.enums import FindingStatus, Severity
 
 
-class FindingIn(BaseModel):
+class FindingCreate(BaseModel):
+    """Finding payload nested inside a run-create request."""
+
     test_case_id: str = Field(min_length=1)
     category: str = Field(min_length=1)
     sub_category: str = Field(min_length=1)
@@ -18,10 +20,12 @@ class FindingIn(BaseModel):
 
 
 class RunCreate(BaseModel):
+    """Request body for POST /runs."""
+
     run_id: str = Field(min_length=1)
     model_version: str = Field(min_length=1)
     timestamp: datetime
-    findings: list[FindingIn]
+    findings: list[FindingCreate]
 
     @model_validator(mode="after")
     def reject_duplicate_test_case_ids(self) -> "RunCreate":
@@ -39,7 +43,9 @@ class RunCreate(BaseModel):
         return self
 
 
-class RunSummaryOut(BaseModel):
+class RunSummary(BaseModel):
+    """Persisted run-level aggregation returned by the API."""
+
     total_findings: int
     critical_count: int
     high_count: int
@@ -48,22 +54,24 @@ class RunSummaryOut(BaseModel):
     average_risk_score: float
 
 
-class RunOut(BaseModel):
+class RunResponse(BaseModel):
+    """API response for a persisted evaluation run."""
+
     model_config = ConfigDict(from_attributes=True)
 
     run_id: str
     model_version: str
     timestamp: datetime
-    summary: RunSummaryOut
+    summary: RunSummary
 
 
-def run_to_response(run: Run) -> RunOut:
+def run_to_response(run: Run) -> RunResponse:
     """Map a Run ORM instance to the API response shape."""
-    return RunOut(
+    return RunResponse(
         run_id=run.run_id,
         model_version=run.model_version,
         timestamp=run.timestamp,
-        summary=RunSummaryOut(
+        summary=RunSummary(
             total_findings=run.total_findings,
             critical_count=run.critical_count,
             high_count=run.high_count,

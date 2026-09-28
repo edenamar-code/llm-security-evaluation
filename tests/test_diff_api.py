@@ -2,7 +2,7 @@
 
 from sqlalchemy.orm import Session
 
-from app.schemas.diff import DiffReportOut
+from app.schemas.diff import DiffReport
 from app.services.diff_service import compare_runs
 from tests.factories import make_finding_payload, make_run_payload
 
@@ -251,7 +251,7 @@ def test_response_matches_pydantic_schema(client) -> None:
         "/diff",
         params={"base_run_id": "diff_base", "head_run_id": "diff_head"},
     ).json()
-    DiffReportOut.model_validate(body)
+    DiffReport.model_validate(body)
 
 
 def test_missing_side_serializes_as_null(client) -> None:

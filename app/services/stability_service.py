@@ -3,8 +3,8 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.models import Finding, FindingStatus, Run, TestCase
 from app.schemas.stability import (
-    StabilityHistoryItemOut,
-    StabilityReportOut,
+    StabilityHistoryItem,
+    StabilityReport,
 )
 from app.services.stability_calc import calculate_stability
 
@@ -49,7 +49,7 @@ def get_test_case_stability(
     *,
     test_case_id: str,
     n: int,
-) -> StabilityReportOut:
+) -> StabilityReport:
     test_case = db.scalar(
         select(TestCase).where(TestCase.test_case_id == test_case_id)
     )
@@ -63,7 +63,7 @@ def get_test_case_stability(
     metrics = calculate_stability(statuses)
 
     history = [
-        StabilityHistoryItemOut(
+        StabilityHistoryItem(
             run_id=finding.run.run_id,
             model_version=finding.run.model_version,
             timestamp=finding.run.timestamp,
@@ -76,7 +76,7 @@ def get_test_case_stability(
     if metrics.stability_score is None:
         message = "At least 2 observations are required to calculate stability."
 
-    return StabilityReportOut(
+    return StabilityReport(
         test_case_id=test_case_id,
         requested_runs=n,
         observations=metrics.observations,

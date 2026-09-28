@@ -349,7 +349,13 @@ Fewer than two observations returns **200** with `stability_score: null` and an 
 
 ## Testing
 
-Tests run against an isolated PostgreSQL database (`llm_security_test`), created automatically on first run. Manual Swagger data in `llm_security` is not touched.
+Tests run against an isolated PostgreSQL database (`llm_security_test`) so they do not touch manual Swagger data in `llm_security`. That database must already exist; if it is missing, the suite fails.
+
+Create it once if needed:
+
+```bash
+docker compose exec db createdb -U postgres llm_security_test
+```
 
 ```bash
 docker compose run --rm api pytest -q

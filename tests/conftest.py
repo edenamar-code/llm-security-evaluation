@@ -6,35 +6,14 @@ import os
 from collections.abc import Generator
 from datetime import UTC, datetime
 
-import psycopg
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 # Route all tests to a dedicated DB before importing application modules.
+# The database must already exist; missing DB should fail loudly.
 TEST_DB_NAME = os.environ.get("POSTGRES_TEST_DB", "llm_security_test")
 os.environ["POSTGRES_DB"] = TEST_DB_NAME
-
-
-def _ensure_test_database_exists() -> None:
-    user = os.environ.get("POSTGRES_USER", "postgres")
-    password = os.environ.get("POSTGRES_PASSWORD", "postgres")
-    host = os.environ.get("POSTGRES_HOST", "db")
-    port = os.environ.get("POSTGRES_PORT", "5432")
-    with psycopg.connect(
-        f"postgresql://{user}:{password}@{host}:{port}/postgres",
-        autocommit=True,
-    ) as connection:
-        with connection.cursor() as cursor:
-            cursor.execute(
-                "SELECT 1 FROM pg_database WHERE datname = %s",
-                (TEST_DB_NAME,),
-            )
-            if cursor.fetchone() is None:
-                cursor.execute(f'CREATE DATABASE "{TEST_DB_NAME}"')
-
-
-_ensure_test_database_exists()
 
 from app.core.config import get_settings  # noqa: E402
 

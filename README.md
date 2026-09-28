@@ -156,6 +156,40 @@ docker compose down -v
 
 ---
 
+## Inspecting the Database (Adminer)
+
+Adminer is included in Docker Compose as a lightweight browser UI for PostgreSQL.
+
+1. Start the stack (`docker compose up --build`)
+2. Open http://localhost:8080
+3. Sign in with:
+
+| Field | Value |
+|---|---|
+| System | PostgreSQL |
+| Server | `db` |
+| Username | value of `POSTGRES_USER` (default `postgres`) |
+| Password | value of `POSTGRES_PASSWORD` (default `postgres`) |
+| Database | value of `POSTGRES_DB` (default `llm_security`) |
+
+Use the same values from `.env` / `.env.example` if you overrode the defaults. Do not commit real credentials.
+
+Useful checks after ingesting a run:
+
+| Table | What to look for |
+|---|---|
+| `runs` | One row per evaluation run, including persisted summary columns |
+| `test_cases` | Reused rows for repeated `test_case_id` values |
+| `findings` | One row per TestCase result in a Run |
+
+Optional CLI alternative:
+
+```bash
+docker compose exec db psql -U postgres -d llm_security
+```
+
+---
+
 ## API Overview
 
 | Method | Endpoint | Description |
